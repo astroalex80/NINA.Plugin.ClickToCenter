@@ -1,0 +1,1 @@
+# NINA.Plugin.ClickToCenter
