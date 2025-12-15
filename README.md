@@ -1,6 +1,9 @@
-# Click-to-Center (N.I.N.A. Plugin)
+# N.I.N.A. Plugin Click-to-Center
 
-Dockable window to center the telescope on a user-selected point in the currently displayed image.
+[![.NET](https://img.shields.io/badge/.NET-8.0-blue)](https://dotnet.microsoft.com/)
+[![License: MPL](https://img.shields.io/badge/License-MPL-green.svg)](LICENSE.txt)
+
+A plugin for [N.I.N.A.](https://nighttime-imaging.eu/) that lets you click a point in the currently displayed image and slew/center the telescope on that target position.
 
 ## What it does
 - Right-click a point in the image of the Click to Center dockable window
