@@ -13,7 +13,7 @@ using System.Runtime.InteropServices;
 // [MANDATORY] The name of your plugin
 [assembly: AssemblyTitle("Click To Center")]
 // [MANDATORY] A short description of your plugin
-[assembly: AssemblyDescription("Centering on a selected point in the image")]
+[assembly: AssemblyDescription("A new dockable window for centering on a selected point in the image")]
 
 // The following attributes are not required for the plugin per se, but are required by the official manifest meta data
 
@@ -45,13 +45,13 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyMetadata("ChangelogURL", "to be added/CHANGELOG.md")]
 
 //[Optional] The url to a featured logo that will be displayed in the plugin list next to the name
-[assembly: AssemblyMetadata("FeaturedImageURL", "")]
+[assembly: AssemblyMetadata("FeaturedImageURL", "https://github.com/astroalex80/NINA.Plugin.ClickToCenter/blob/master/NINA.Plugin.ClickToCenter/screenshot.PNG")]
 //[Optional] A url to an example screenshot of your plugin in action
 [assembly: AssemblyMetadata("ScreenshotURL", "")]
 //[Optional] An additional url to an example example screenshot of your plugin in action
 [assembly: AssemblyMetadata("AltScreenshotURL", "")]
 //[Optional] An in-depth description of your plugin
-[assembly: AssemblyMetadata("LongDescription", @"Select a target by right-clicking on the current image and hit slew and center.
+[assembly: AssemblyMetadata("LongDescription", @"Select a target by right-clicking on the current image in Click to Center dockable and hit slew and center.
 When executed, the plugin plate-solves the current image, converts the selected pixel position to RA/Dec, and runs a centering routine to slew/center the mount.")]
 
 // Setting ComVisible to false makes the types in this assembly not visible
