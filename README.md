@@ -25,3 +25,5 @@ A plugin for [N.I.N.A.](https://nighttime-imaging.eu/) that lets you click a poi
 3. Capture an image
 4. Right-Click on the desired position in the image
 5. Click Button **Slew and center**
+
+<img src="https://raw.githubusercontent.com/astroalex80/NINA.Plugin.ClickToCenter/master/NINA.Plugin.ClickToCenter/screenshot.PNG" width="700" />
