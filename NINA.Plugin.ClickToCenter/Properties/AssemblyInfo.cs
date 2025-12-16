@@ -7,13 +7,13 @@ using System.Runtime.InteropServices;
 
 // [MANDATORY] The assembly versioning
 //Should be incremented for each new release build of a plugin
-[assembly: AssemblyVersion("1.0.0.1")]
-[assembly: AssemblyFileVersion("1.0.0.1")]
+[assembly: AssemblyVersion("1.1.0.1")]
+[assembly: AssemblyFileVersion("1.1.0.1")]
 
 // [MANDATORY] The name of your plugin
 [assembly: AssemblyTitle("Click To Center")]
 // [MANDATORY] A short description of your plugin
-[assembly: AssemblyDescription("A new dockable window for centering on a selected point in the image")]
+[assembly: AssemblyDescription("A new dockable window for slewing and centering the mount on a selected point in the image. Additionally the target coordinates can be send to the Framing Assistant tab.")]
 
 // The following attributes are not required for the plugin per se, but are required by the official manifest meta data
 
@@ -52,7 +52,8 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyMetadata("AltScreenshotURL", "")]
 //[Optional] An in-depth description of your plugin
 [assembly: AssemblyMetadata("LongDescription", @"Select a target by right-clicking on the current image in the Click to Center dockable and hit slew and center.
-The plugin plate-solves the current image, converts the selected pixel position to RA/Dec coordinates, and runs a centering routine to slew/center the mount on the .")]
+The plugin plate-solves the current image, converts the selected pixel position to RA/Dec coordinates, and runs a centering routine to slew/center the telescope to these coordinates. 
+Additionally you can send the coordinates of the image center or the crosshair position to the framing wizard.")]
 
 // Setting ComVisible to false makes the types in this assembly not visible
 // to COM components.  If you need to access a type in this assembly from

@@ -1,6 +1,8 @@
 ﻿using CommunityToolkit.Mvvm.Input;
 using NINA.Astrometry;
+using NINA.Core.Enum;
 using NINA.Core.Model;
+using NINA.Core.MyMessageBox;
 using NINA.Core.Utility;
 using NINA.Core.Utility.Notification;
 using NINA.Core.Utility.WindowService;
@@ -12,12 +14,14 @@ using NINA.PlateSolving;
 using NINA.Profile.Interfaces;
 using NINA.Sequencer.SequenceItem.Platesolving;
 using NINA.WPF.Base.Interfaces.Mediator;
+using NINA.WPF.Base.Interfaces.ViewModel;
 using NINA.WPF.Base.ViewModel;
 using System;
 using System.ComponentModel.Composition;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using RelayCommand = CommunityToolkit.Mvvm.Input.RelayCommand;
 
@@ -35,6 +39,8 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
         private readonly IDomeMediator domeMediator;
         private readonly IDomeFollower domeFollower;
         private readonly IGuiderMediator guiderMediator;
+        private readonly IFramingAssistantVM framingAssistantVM;
+        private readonly IApplicationMediator applicationMediator;
 
         // State
         private CancellationTokenSource? _centerCts;
@@ -65,7 +71,9 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
             IFilterWheelMediator filterWheelMediator,
             IDomeMediator domeMediator,
             IDomeFollower domeFollower,
-            IGuiderMediator guiderMediator) : base(profileService) {
+            IGuiderMediator guiderMediator,
+            IFramingAssistantVM framingAssistantVM,
+            IApplicationMediator applicationMediator) : base(profileService) {
 
             this.profileService = profileService;
             this.imagingMediator = imagingMediator;
@@ -76,7 +84,8 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
             this.domeMediator = domeMediator;
             this.domeFollower = domeFollower;
             this.guiderMediator = guiderMediator;
-
+            this.framingAssistantVM = framingAssistantVM;
+            this.applicationMediator = applicationMediator;
             // This will reference the resource dictionary to import the SVG graphic and assign it as the icon for the header bar
             var dict = new ResourceDictionary();
             dict.Source = new Uri("NINA.Plugin.ClickToCenter;component/ClickToCenterDockables/ClickToCenterDockableTemplates.xaml", UriKind.RelativeOrAbsolute);
@@ -90,23 +99,16 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
                 execute: CancelCenter,
                 canExecute: () => _centerCts is not null && !_centerCts.IsCancellationRequested);
 
+            SendCoordinatesToFramingAssistantCommand = new AsyncCommand<bool>(_ => SendCoordinatesToFramingAssistant(), _ => CanSend());
+
             imagingMediator.ImagePrepared += ImagingMediator_ImagePrepared;
 
         }
 
-        //public IProgress<ApplicationStatus> Progress {
-        //    get {
-        //        if (progress == null) {
-        //            progress = new Progress<ApplicationStatus>();
-        //        }
-        //        return progress;
-        //    }
-        //}
-
         public RelayCommand<object> SetClickPointCommand { get; }
         public AsyncCommand<bool> CenterCommand { get; }
         public RelayCommand CancelCenterCommand { get; }
-
+        public ICommand SendCoordinatesToFramingAssistantCommand { get; private set; }
         internal IRenderedImage LastRenderedImage {
             get => _lastRenderedImage;
             private set {
@@ -188,14 +190,18 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
                 }
             }
         }
-
+        
         private bool CanCenter() {
             return !IsBusy && LastRenderedImage != null &&
                    cameraMediator?.GetInfo()?.Connected == true &&
                    telescopeMediator?.GetInfo()?.Connected == true &&
                    ClickX >= 0 && ClickY >= 0;
         }
-      
+
+        private bool CanSend() {
+            return LastRenderedImage != null && LastImage != null;
+        }
+
         private void ImagingMediator_ImagePrepared(object sender, ImagePreparedEventArgs e) {
 
             if (e?.RenderedImage?.Image is null) return;
@@ -231,56 +237,82 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
 
         }
 
+        private async Task<bool> SendCoordinatesToFramingAssistant() {
+            
+            _centerCts?.Dispose();
+            _centerCts = new CancellationTokenSource();
+
+            try {
+                bool useCrosshairCoordinates = false;
+
+                if (HasClickPoint) {
+                    var choice = MyMessageBox.Show(
+                        "Send the image center (No) or the crosshair (Yes) coordinates to Framing Assistant?",
+                        "Send coordinates to Framing Assistant",
+                        MessageBoxButton.YesNo, defaultresult: MessageBoxResult.Yes);
+
+                    useCrosshairCoordinates = (choice == MessageBoxResult.Yes);
+                }
+
+                await PlateSolveCurrentImage(_centerCts.Token);
+
+                if (!plateSolveStatusVM.PlateSolveResult.Success) return false;
+
+                var targetCoordinates = plateSolveStatusVM.PlateSolveResult.Coordinates;
+
+                if (useCrosshairCoordinates) {
+                    if (!ShiftCoordinatesFromPixelOffset(out Coordinates targetShiftedCoordinates)) return false;
+                    targetCoordinates = targetShiftedCoordinates;
+                    
+                }
+
+                DeepSkyObject targetDSO = new DeepSkyObject(string.Empty, targetCoordinates, string.Empty,
+                    profileService.ActiveProfile.AstrometrySettings.Horizon);
+                applicationMediator.ChangeTab(ApplicationTab.FRAMINGASSISTANT);
+                return await framingAssistantVM.SetCoordinates(targetDSO);
+
+            } catch (OperationCanceledException) {
+                Notification.ShowInformation("Send to Framing Assistant cancelled.", TimeSpan.FromSeconds(5));
+                Logger.Info("Send to Framing Assistant cancelled.");
+                return false;
+            } catch (Exception ex) {
+                Logger.Error(ex);
+                Notification.ShowError(ex.Message);
+                return false;
+            } finally {
+                ResetCrosshair();
+            }
+
+        }
         private async Task<bool> CenterAsync() {
 
             _centerCts?.Dispose();
             _centerCts = new CancellationTokenSource();
             CancelCenterCommand.NotifyCanExecuteChanged();
 
-            if (!CanCenter()) {
-                return false;
-            }
-
             IsBusy = true;
 
             try {
 
-                var renderedImage = LastRenderedImage;
-                if (renderedImage == null) {
-                    return false;
-                }
-
-                int width = LastImageWidth;
-                int height = LastImageHeight;
-
-                double clickX = ClickX;
-                double clickY = ClickY;
-
-                if (clickX < 0 || clickX >= width || clickY < 0 || clickY >= height) {
-                    Notification.ShowWarning("No target position set. Click on the image to define a target.");
-                    return false;
-                }
-                
                 await PlateSolveCurrentImage(_centerCts.Token);
 
-                if (plateSolveStatusVM.PlateSolveResult is null || plateSolveStatusVM.PlateSolveResult.Success == false) {
+                if (!plateSolveStatusVM.PlateSolveResult.Success) {
                     Notification.ShowError("Plate-solving failed. Click to Center stopped.");
                     return false;
                 }
 
                 PlateSolveResult solveResult = plateSolveStatusVM.PlateSolveResult;
 
-                double xOffset = (clickX - width / 2.0);
-                double yOffset = (clickY - height / 2.0);
+                if(!ShiftCoordinatesFromPixelOffset (out Coordinates targetCoords)) return false;
 
-                double deltaXDeg = AstroUtil.ArcsecToDegree(xOffset * solveResult.Pixscale);
-                double deltaYDeg = AstroUtil.ArcsecToDegree(yOffset * solveResult.Pixscale);
+                //double deltaXDeg = AstroUtil.ArcsecToDegree(xOffset * solveResult.Pixscale);
+                //double deltaYDeg = AstroUtil.ArcsecToDegree(yOffset * solveResult.Pixscale);
 
-                Coordinates targetCoords = solveResult.Coordinates.Shift(deltaXDeg, deltaYDeg, /* solveResult.PositionAngle*/ solveResult.Orientation ,
-                    Coordinates.ProjectionType.Gnomonic);
+                //Coordinates targetCoords = solveResult.Coordinates.Shift(deltaXDeg, deltaYDeg,solveResult.Orientation ,
+                //    Coordinates.ProjectionType.Gnomonic);
                 
-                Logger.Info($"Pixel offset from image center X: {Math.Round(clickX,3)}; Y: {Math.Round(clickY, 3)} - target coordinates: RA: {targetCoords.RAString}; DEC: {targetCoords.DecString}; Epoch: {targetCoords.Epoch}");
-                
+                Logger.Info($"Pixel offset from image center X: {Math.Round(ClickX,3)}; Y: {Math.Round(ClickY, 3)} - target coordinates: RA: {targetCoords.RAString}; DEC: {targetCoords.DecString}; Epoch: {targetCoords.Epoch}");
+
                 bool centered = await Center(targetCoords, _centerCts.Token);
                 
                 return centered;
@@ -294,15 +326,59 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
                 Notification.ShowError(ex.Message);
                 return false;
             } finally {
-                HasClickPoint = false;
-                ClickX = -1; // reset click points
-                ClickY = -1;
-                _centerCts?.Dispose();
-                _centerCts = null;
-                CancelCenterCommand.NotifyCanExecuteChanged();
-                IsBusy = false;
+                ResetCrosshair();
             }
 
+        }
+
+        private void ResetCrosshair() {
+            HasClickPoint = false;
+            ClickX = -1;
+            ClickY = -1;
+            _centerCts?.Dispose();
+            _centerCts = null;
+            CancelCenterCommand.NotifyCanExecuteChanged();
+            RaisePropertyChanged(nameof(CanCenter));
+            RaisePropertyChanged(nameof(CanSend));
+            IsBusy = false;
+        }
+
+        private bool ShiftCoordinatesFromPixelOffset(out Coordinates shiftedCoordinates) {
+
+            shiftedCoordinates = null;
+
+            if (LastImageWidth == 0 || LastImageHeight == 0) return false;
+
+            var plateSolveResult = plateSolveStatusVM?.PlateSolveResult;
+            if (plateSolveResult == null || !plateSolveResult.Success) {
+                return false;
+            }
+
+            int width = LastImageWidth;
+            int height = LastImageHeight;
+
+            double clickX = ClickX;
+            double clickY = ClickY;
+
+            // Wenn kein gültiger Klickpunkt gesetzt ist -> false + Warning (wie bisher)
+            //if (clickX < 0 || clickX >= width || clickY < 0 || clickY >= height) {
+            //    Notification.ShowWarning("No target position set. Click on the image to define a target.");
+            //    return false;
+            //}
+
+            double xOffsetPx = clickX - (width / 2.0);
+            double yOffsetPx = clickY - (height / 2.0);
+
+            double deltaXDeg = AstroUtil.ArcsecToDegree(xOffsetPx * plateSolveResult.Pixscale);
+            double deltaYDeg = AstroUtil.ArcsecToDegree(yOffsetPx * plateSolveResult.Pixscale);
+
+            shiftedCoordinates = plateSolveResult.Coordinates.Shift(
+                deltaXDeg,
+                deltaYDeg,
+                plateSolveResult.Orientation,
+                Coordinates.ProjectionType.Gnomonic);
+
+            return true;
         }
 
         private IWindowServiceFactory WindowServiceFactory {
@@ -378,6 +454,8 @@ namespace NINA.Plugin.ClickToCenter.ClickToCenterDockables {
             }
 
             CancelCenterCommand.NotifyCanExecuteChanged();
+            RaisePropertyChanged(nameof(CanCenter));
+            RaisePropertyChanged(nameof(CanSend));
         }
 
         private void OnSetClickPoint(object? p) {

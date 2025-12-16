@@ -11,25 +11,55 @@
         <wpfbase:ImageView Image="{Binding LastImage}" RightMouseButtonDownCommand="{Binding SetClickPointCommand}">
             <wpfbase:ImageView.ButtonHeaderContent>
                 <StackPanel
-                    Height="35"
+                    Height="40"
                     Margin="0,0,5,0"
                     VerticalAlignment="Center"
                     Orientation="Horizontal">
                     <TextBlock
-                        Margin="0,0,10,0"
+                        Margin="0,0,15,0"
                         VerticalAlignment="Center"
                         Text="1) Right-Click on the image to select a target position." />
                     <ninactrl:CancellableButton
-                        Height="25"
-                        Margin="12,0,12,0"
-                        Padding="10,0,10,0"
+                        Height="35"
+                        Margin="2.5"
+                        Padding="10,0,10,2"
                         HorizontalAlignment="Stretch"
                         ButtonText="{ns:Loc LblSlewCenter}"
                         CancelButtonImage="{StaticResource CancelSVG}"
                         CancelCommand="{Binding CancelCenterCommand}"
                         CancelToolTip="{ns:Loc LblCancel}"
                         Command="{Binding CenterCommand}"
-                        ToolTip="Slew and Center on the image point selected" />
+                        ToolTip="Slew and center telescope on the crosshair coordinates" />
+                    <ninactrl:CancellableButton
+                        Width="35"
+                        Height="35"
+                        Margin="2.5"
+                        Padding="10,0,10,2"
+                        HorizontalAlignment="Stretch"
+                        ButtonImage="{StaticResource FocusAssistantSVG}"
+                        CancelButtonImage="{StaticResource CancelSVG}"
+                        CancelCommand="{Binding CancelCenterCommand}"
+                        CancelToolTip="{ns:Loc LblCancel}"
+                        Command="{Binding SendCoordinatesToFramingAssistantCommand}"
+                        ToolTip="Send coordinates to the Framing Assistant" />
+                    <!--
+                    <Button
+                        Width="35"
+                        Height="35"
+                        Margin="2.5"
+                        VerticalAlignment="Center"
+                        HorizontalContentAlignment="Right"
+                        Command="{Binding SendCoordinatesToFramingAssistantCommand}"
+                        ToolTip="">
+                        <Grid>
+                            <Path
+                                Margin="5"
+                                Data="{StaticResource FocusAssistantSVG}"
+                                Fill="{StaticResource ButtonForegroundBrush}"
+                                Stretch="Uniform" />
+                        </Grid>
+                    </Button>
+                    -->
                 </StackPanel>
             </wpfbase:ImageView.ButtonHeaderContent>
             <wpfbase:ImageView.ImageAreaContent>
